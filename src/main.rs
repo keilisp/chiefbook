@@ -2,6 +2,7 @@ extern crate termion;
 mod event;
 use crate::event::{Event, Events};
 
+use pipers::Pipe;
 use std::error::Error;
 use std::io::stdout;
 use std::path::Path;
@@ -32,7 +33,8 @@ fn main() -> Result<(), Box<dyn Error>> {
         ext: String,
         author: String,
         year: String,
-        total_pages: u32,
+        // total_pages: u32,
+        total_pages: String,
         current_page: u32,
     }
 
@@ -43,7 +45,8 @@ fn main() -> Result<(), Box<dyn Error>> {
             ext: String,
             author: String,
             year: String,
-            total_pages: u32,
+            // total_pages: u32,
+            total_pages: String,
             current_page: u32,
         ) -> Self {
             Document {
@@ -79,31 +82,38 @@ fn main() -> Result<(), Box<dyn Error>> {
                     let file_name_noext =
                         file_path.file_stem().unwrap().to_str().unwrap().to_string();
 
-                    // Give it to the another tread(then create db)
-                    let exiftoo_output = Command::new("exiftool")
-                        .arg(&file_path)
-                        .output()
-                        .expect("Can't read the metadata!");
+                    let exiftool_cmd_author =
+                        format!("exiftool -Author {}", file_path.to_str().unwrap());
 
-                    if !exiftoo_output.status.success() {
-                        panic!("Command executed with failing error code");
+                    let author_out = Pipe::new(&exiftool_cmd_author)
+                        .then("cut -d : -f2")
+                        .finally()
+                        .expect("Commands did not pipe")
+                        .wait_with_output()
+                        .expect("Failed to wait on child");
+
+                    let author_str = String::from_utf8(author_out.stdout).unwrap();
+
+                    let mut author = author_str.trim();
+                    if author.is_empty() {
+                        author = "Unknown";
                     }
 
-                    let author_pattern = Regex::new(r"Author \s*: (.*)").unwrap();
+                    let exiftool_cmd_pages =
+                        format!("exiftool -PageCount {}", file_path.to_str().unwrap());
 
-                    let exiftoo_output_string = String::from_utf8(exiftoo_output.stdout).unwrap();
+                    let pages_out = Pipe::new(&exiftool_cmd_pages)
+                        .then("cut -d : -f2")
+                        .finally()
+                        .expect("Commands did not pipe")
+                        .wait_with_output()
+                        .expect("Failed to wait on child");
 
-                    let matched_author_strings = exiftoo_output_string
-                        .lines()
-                        .filter(|line| author_pattern.is_match(line))
-                        .collect::<Vec<&str>>();
+                    let pages_count_str = String::from_utf8(pages_out.stdout).unwrap();
 
-                    let author;
-                    if !matched_author_strings.is_empty() {
-                        author =
-                            matched_author_strings[0].split(":").collect::<Vec<&str>>()[1].trim();
-                    } else {
-                        author = "Undefined";
+                    let mut pages_count = pages_count_str.trim();
+                    if pages_count.is_empty() {
+                        pages_count = "Unknown";
                     }
 
                     let document = Document::new(
@@ -112,7 +122,7 @@ fn main() -> Result<(), Box<dyn Error>> {
                         file_ext,
                         author.to_string(),
                         "1984".to_string(),
-                        123,
+                        pages_count.to_string(),
                         32,
                     );
 
@@ -155,7 +165,6 @@ fn main() -> Result<(), Box<dyn Error>> {
 
         pub fn open(&self) {
             let current_doc = &self.items[self.state.selected().unwrap()];
-            // println!("{:?}", current_doc.author);
             if current_doc.ext == "pdf" {
                 Command::new("zathura")
                     .arg(&current_doc.path)

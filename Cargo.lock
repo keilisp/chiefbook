@@ -31,6 +31,7 @@ checksum = "4785bdd1c96b2a846b2bd7cc02e86b6b3dbf14e7e53446c4f54c92a361040822"
 name = "chiefbook"
 version = "0.1.0"
 dependencies = [
+ "pipers",
  "rand",
  "regex",
  "termion",
@@ -71,6 +72,12 @@ name = "numtoa"
 version = "0.1.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "b8f8bdf33df195859076e54ab11ee78a1b208382d3a26ec40d142ffc1ecc49ef"
+
+[[package]]
+name = "pipers"
+version = "1.0.1"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "ee5fc4ee2584767241d624644f8dc720b0e4a6fa7af22cd38dfb66b05304cc26"
 
 [[package]]
 name = "ppv-lite86"
