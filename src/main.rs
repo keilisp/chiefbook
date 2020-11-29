@@ -20,27 +20,45 @@ use tui::{
     Terminal,
 };
 
+extern crate regex;
+
+use regex::Regex;
+
 fn main() -> Result<(), Box<dyn Error>> {
+    // #[derive(Debug)]
     struct Document {
         path: PathBuf,
         name: String,
         ext: String,
         author: String,
-        year: String, // refactor to date
+        year: String,
+        total_pages: u32,
+        current_page: u32,
     }
 
     impl<'a> Document {
-        fn new(path: PathBuf, name: String, ext: String, author: String, year: String) -> Self {
+        fn new(
+            path: PathBuf,
+            name: String,
+            ext: String,
+            author: String,
+            year: String,
+            total_pages: u32,
+            current_page: u32,
+        ) -> Self {
             Document {
                 path,
                 name,
                 ext,
                 author,
                 year,
+                total_pages,
+                current_page,
             }
         }
     }
 
+    // #[derive(Debug)]
     struct Documents {
         items: Vec<Document>,
         state: ListState,
@@ -56,17 +74,46 @@ fn main() -> Result<(), Box<dyn Error>> {
             {
                 if let Ok(entry) = entry {
                     let file_path = entry.path();
-                    let _file_name = entry.file_name();
+                    let file_name = entry.file_name();
                     let file_ext = file_path.extension().unwrap().to_str().unwrap().to_string();
                     let file_name_noext =
                         file_path.file_stem().unwrap().to_str().unwrap().to_string();
+
+                    // Give it to the another tread(then create db)
+                    let exiftoo_output = Command::new("exiftool")
+                        .arg(&file_path)
+                        .output()
+                        .expect("Can't read the metadata!");
+
+                    if !exiftoo_output.status.success() {
+                        panic!("Command executed with failing error code");
+                    }
+
+                    let author_pattern = Regex::new(r"Author \s*: (.*)").unwrap();
+
+                    let exiftoo_output_string = String::from_utf8(exiftoo_output.stdout).unwrap();
+
+                    let matched_author_strings = exiftoo_output_string
+                        .lines()
+                        .filter(|line| author_pattern.is_match(line))
+                        .collect::<Vec<&str>>();
+
+                    let author;
+                    if !matched_author_strings.is_empty() {
+                        author =
+                            matched_author_strings[0].split(":").collect::<Vec<&str>>()[1].trim();
+                    } else {
+                        author = "Undefined";
+                    }
 
                     let document = Document::new(
                         file_path.to_path_buf(),
                         file_name_noext,
                         file_ext,
-                        "mediocre".to_string(),
+                        author.to_string(),
                         "1984".to_string(),
+                        123,
+                        32,
                     );
 
                     items.push(document);
@@ -108,12 +155,13 @@ fn main() -> Result<(), Box<dyn Error>> {
 
         pub fn open(&self) {
             let current_doc = &self.items[self.state.selected().unwrap()];
+            // println!("{:?}", current_doc.author);
             if current_doc.ext == "pdf" {
                 Command::new("zathura")
                     .arg(&current_doc.path)
                     .stderr(Stdio::null())
                     .status()
-                    .expect("shieeet");
+                    .expect("Can't open this file!");
             } else {
                 Command::new("xdg-open")
                     .arg(&current_doc.path)
@@ -137,9 +185,8 @@ fn main() -> Result<(), Box<dyn Error>> {
 
     terminal.clear().unwrap();
 
-    // let files = get_files_from_dir("/home/mediocre/dox/2read".to_string());
-    let files_for_info = get_files_from_dir("/home/mediocre/dox/2read".to_string());
     let mut documents = Documents::new("/home/mediocre/dox/2read".to_string());
+    // let mut documents = Documents::new("/home/mediocre/dox/test".to_string());
     documents.state.select(Some(0));
 
     loop {
